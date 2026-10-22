@@ -1,8 +1,8 @@
 name: Publicera på GitHub Pages
 
+# Körs bara manuellt (Actions → Publicera på GitHub Pages → Run workflow) så länge repot är privat.
+# För automatisk publicering vid varje push: lägg tillbaka "push: branches: [main]".
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

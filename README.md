@@ -39,7 +39,8 @@ PY=.venv/Scripts/python ./run_all.sh
 
 ## Publicering
 
-`.github/workflows/deploy.yml` bygger och publicerar `web/` till GitHub Pages vid varje push till `main`.
+`.github/workflows/deploy.yml` bygger och publicerar `web/` till GitHub Pages. Den körs manuellt via
+*Actions → Publicera på GitHub Pages → Run workflow*. GitHub Pages kräver publikt repo på gratisplanen.
 Aktivera Pages under *Settings → Pages → Source: GitHub Actions*.
 
 ## Källor
