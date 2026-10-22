@@ -1,0 +1,11 @@
+{
+ "built": "2026-10-22",
+ "sources": {
+  "scb": "SCB Statistikdatabasen (PxWebApi v2): folkmängd 2025, nettoinkomst 2024, ekonomisk standard 2024, utbildning 2025, sysselsättning 2024, upplåtelseform 2025, socioekonomiskt index/områdestyp 2024",
+  "police": "Polismyndigheten, Lägesbild över utsatta områden 2025 (områdesgränser 2025-12-01)",
+  "prices": "Svensk Mäklarstatistik, uppdaterad 08 oktober 2026",
+  "osm": "OpenStreetMap-bidragsgivare (ODbL): spårtrafik, matbutiker, parker, badplatser, förskolor",
+  "schools": "Skolverket, Planerade utbildningar API v3 (meritvärde åk 9)",
+  "boundaries": "SCB DeSO 2025 och RegSO 2025"
+ }
+}
