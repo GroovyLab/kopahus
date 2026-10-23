@@ -5,6 +5,8 @@ import { Router, accessMinutes, distM } from '../lib/routing'
 import { SAFETY, WEIGHT_LABELS, totalScore, fmtDist, fmtKr, fmtMin, fmtNum, scoreColor } from '../lib/score'
 import type { DesoProps, FC, Poi, PriceArea, Prefs, Transit, WeightKey } from '../lib/types'
 import Sparkline from './Sparkline'
+import { PERSON_COLORS, timeAgo } from '../lib/shared'
+import type { Shared } from '../lib/shared'
 
 interface Props {
   row: Row
@@ -17,6 +19,8 @@ interface Props {
   onClose: () => void
   open: boolean
   setOpen: (v: boolean) => void
+  /** Satt när man är inloggad: visar vad den andra tycker om området */
+  shared: Shared | null
 }
 
 const AREA_TYPE: Record<number, string> = {
@@ -27,7 +31,7 @@ const AREA_TYPE: Record<number, string> = {
   5: 'Mycket goda socioekonomiska förutsättningar',
 }
 
-export default function DetailPanel({ row, point, data, prefs, router, isFav, toggleFav, onClose, open, setOpen }: Props) {
+export default function DetailPanel({ row, point, data, prefs, router, isFav, toggleFav, onClose, open, setOpen, shared }: Props) {
   const p = row.p
   const [addr, setAddr] = useState<{ street?: string; houseNumber?: string; suburb?: string; city?: string } | null>(null)
   const here: [number, number] = point ?? p.anchor
@@ -143,6 +147,7 @@ export default function DetailPanel({ row, point, data, prefs, router, isFav, to
       </header>
 
       <div className="detail-body">
+        {shared && <Social shared={shared} desoId={p.id} />}
         <section className="score-card">
           <div className="ring" style={{ ['--v' as string]: row.total, ['--c' as string]: scoreColor(row.total) }}>
             <b>{row.total}</b>
@@ -392,6 +397,32 @@ function Compare({ label, v, avg, unit = '', d = 1, invert = false }: { label: s
         Länssnitt {fmtNum(avg, d)}
         {unit}
       </small>
+    </div>
+  )
+}
+
+function Social({ shared, desoId }: { shared: Shared; desoId: string }) {
+  const items = shared.members.flatMap((m) => {
+    const mine = shared.activity.filter((a) => a.deso_id === desoId && a.email.toLowerCase() === m.email.toLowerCase())
+    const fav = mine.find((a) => a.kind === 'fav')
+    const views = mine.filter((a) => a.kind === 'view')
+    const isMe = m.email.toLowerCase() === shared.me?.email.toLowerCase()
+    if (!fav && !views.length) return []
+    const parts = [
+      fav ? `${isMe ? 'Du' : m.name} har sparat området` : null,
+      views.length ? `${isMe ? 'du' : m.name} tittade ${timeAgo(views[0].created_at)}${views.length > 1 ? ` (${views.length} ggr)` : ''}` : null,
+    ].filter(Boolean)
+    return [{ m, text: parts.join(' · ').replace(/^./, (c) => c.toUpperCase()) }]
+  })
+  if (!items.length) return null
+  return (
+    <div className="social">
+      {items.map(({ m, text }) => (
+        <div key={m.email} className="social-row" style={{ ['--c' as string]: PERSON_COLORS[m.color] }}>
+          <i className="person-dot" />
+          <span>{text}</span>
+        </div>
+      ))}
     </div>
   )
 }

@@ -8,6 +8,9 @@ import SearchBar from './components/SearchBar'
 import Methodology from './components/Methodology'
 import Legend from './components/Legend'
 import Compare from './components/Compare'
+import Ours from './components/Ours'
+import { AccountButton, ProfileModal } from './components/Account'
+import { PERSON_COLORS, useShared } from './lib/shared'
 import { Router, travelToTarget } from './lib/routing'
 import { DEFAULT_PREFS, SAFETY, components, estimatePrice, scoreColor, totalScore, fmtMin } from './lib/score'
 import type { Components } from './lib/score'
@@ -65,7 +68,11 @@ export default function App() {
   const [point, setPoint] = useState<[number, number] | null>(null)
   const [flyTo, setFlyTo] = useState<{ center: [number, number]; zoom: number; key: number } | null>(null)
   const [hover, setHover] = useState<{ x: number; y: number; id: string } | null>(null)
-  const [panel, setPanel] = useState<'filters' | 'ranking' | 'compare'>('filters')
+  const [panel, setPanel] = useState<'filters' | 'ranking' | 'ours' | 'compare'>('filters')
+  const shared = useShared()
+  const [showProfile, setShowProfile] = useState(false)
+  // Med en profil sparas favoriter och historik i delningsformatet; annars bara lokala favoriter
+  const loggedIn = !!shared.me
   const [showMethod, setShowMethod] = useState(false)
   const [mobileSheet, setMobileSheet] = useState(false)
   // På mobil är vänsterpanelen hopfälld tills man trycker på en flik
@@ -147,6 +154,62 @@ export default function App() {
     return m
   }, [rows, lens, prefs.excludeUtsatta])
 
+  // Inloggad: favoriter delas via databasen. Annars sparas de lokalt i webbläsaren.
+  const myEmail = shared.me?.email.toLowerCase()
+  const myFavIds = useMemo(
+    () =>
+      loggedIn
+        ? shared.activity.filter((a) => a.kind === 'fav' && a.email.toLowerCase() === myEmail).map((a) => a.deso_id)
+        : favs.ids,
+    [loggedIn, shared.activity, myEmail, favs.ids],
+  )
+  const compareIds = useMemo(
+    () => [...new Set([...favs.ids, ...shared.activity.filter((a) => a.kind === 'fav').map((a) => a.deso_id)])],
+    [shared.activity, favs.ids],
+  )
+  const personFavs = useMemo(() => {
+    if (!shared.members.length) return []
+    return shared.members.map((m, i) => ({
+      color: PERSON_COLORS[m.color],
+      offset: i === 0 ? -1.6 : 1.6,
+      ids: shared.activity.filter((a) => a.kind === 'fav' && a.email.toLowerCase() === m.email.toLowerCase()).map((a) => a.deso_id),
+    }))
+  }, [shared.members, shared.activity])
+  const personHistory = useMemo(() => {
+    if (!shared.members.length) return []
+    const seen = new Set<string>()
+    const out: { lon: number; lat: number; color: string }[] = []
+    for (const a of shared.activity) {
+      if (a.kind !== 'view' || a.lon == null || a.lat == null) continue
+      const k = `${a.email}|${a.deso_id}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      const m = shared.memberOf(a.email)
+      out.push({ lon: a.lon, lat: a.lat, color: m ? PERSON_COLORS[m.color] : '#888' })
+    }
+    return out
+  }, [shared.members.length, shared.activity, shared.memberOf])
+
+  // Flytta lokala favoriter till databasen första gången man loggar in
+  useEffect(() => {
+    if (!loggedIn || !data || !favs.ids.length) return
+    const ids = favs.ids.filter((id) => !myFavIds.includes(id))
+    setFavs({ ids: [] })
+    for (const id of ids) {
+      const r = rowById.get(id)
+      if (r) shared.toggleFav(id, r.p.regsoName, r.p.anchor)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn, data])
+
+  // Logga visningar så att den andra ser vad man tittat på
+  useEffect(() => {
+    if (!loggedIn || !selected) return
+    const r = rowById.get(selected)
+    if (r) shared.logView(selected, r.p.regsoName, point ?? r.p.anchor)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn, selected])
+
   const onPick = useCallback((lngLat: [number, number], id: string | null) => {
     setPoint(lngLat)
     setSelected(id)
@@ -195,6 +258,8 @@ export default function App() {
         flyTo={flyTo}
         onPick={onPick}
         onHover={setHover}
+        personFavs={personFavs}
+        personHistory={personHistory}
       />
 
       <header className="topbar">
@@ -212,6 +277,7 @@ export default function App() {
         <button className="ghost-btn" onClick={() => setShowMethod(true)}>
           Källor & metod
         </button>
+        <AccountButton shared={shared} onSetup={() => setShowProfile(true)} />
       </header>
 
       <aside className={`left ${leftOpen ? '' : 'collapsed'} ${sel ? 'has-detail' : ''}`}>
@@ -222,8 +288,11 @@ export default function App() {
           <button className={panel === 'ranking' ? 'on' : ''} onClick={() => openTab('ranking')}>
             Topplista
           </button>
+          <button className={panel === 'ours' ? 'on' : ''} onClick={() => openTab('ours')}>
+            Vårt
+          </button>
           <button className={panel === 'compare' ? 'on' : ''} onClick={() => openTab('compare')}>
-            Jämför {favs.ids.length ? <b className="pill">{favs.ids.length}</b> : null}
+            Jämför {compareIds.length ? <b className="pill">{compareIds.length}</b> : null}
           </button>
         </nav>
         <div className="left-body">
@@ -242,12 +311,35 @@ export default function App() {
               }}
             />
           )}
+          {panel === 'ours' && (
+            <Ours
+              shared={shared}
+              rowById={rowById}
+              onSetup={() => setShowProfile(true)}
+              onPick={(id, lonlat) => {
+                const r = rowById.get(id)
+                if (!r) return
+                setFlyTo({ center: lonlat ?? r.p.anchor, zoom: 14, key: Date.now() })
+                setSelected(id)
+                setPoint(lonlat)
+                if (window.innerWidth <= 860) setLeftOpen(false)
+              }}
+            />
+          )}
           {panel === 'compare' && (
             <Compare
-              rows={favs.ids.map((id) => rowById.get(id)).filter((r): r is Row => !!r)}
+              rows={compareIds.map((id) => rowById.get(id)).filter((r): r is Row => !!r)}
+              owners={personFavs}
               prices={data.prices}
               prefs={prefs}
-              onRemove={(id) => setFavs((f) => ({ ids: f.ids.filter((x) => x !== id) }))}
+              onRemove={
+                loggedIn
+                  ? (id) => {
+                      const r = rowById.get(id)
+                      if (r && myFavIds.includes(id)) shared.toggleFav(id, r.p.regsoName, r.p.anchor)
+                    }
+                  : (id) => setFavs((f) => ({ ids: f.ids.filter((x) => x !== id) }))
+              }
               onPick={(r) => {
                 setFlyTo({ center: r.p.anchor, zoom: 13.5, key: Date.now() })
                 setSelected(r.p.id)
@@ -266,10 +358,13 @@ export default function App() {
           data={data}
           prefs={prefs}
           router={router!}
-          isFav={favs.ids.includes(sel.p.id)}
+          isFav={myFavIds.includes(sel.p.id)}
           toggleFav={() =>
-            setFavs((f) => ({ ids: f.ids.includes(sel.p.id) ? f.ids.filter((x) => x !== sel.p.id) : [...f.ids, sel.p.id] }))
+            loggedIn
+              ? shared.toggleFav(sel.p.id, sel.p.regsoName, point ?? sel.p.anchor)
+              : setFavs((f) => ({ ids: f.ids.includes(sel.p.id) ? f.ids.filter((x) => x !== sel.p.id) : [...f.ids, sel.p.id] }))
           }
+          shared={shared.members.length ? shared : null}
           onClose={() => {
             setSelected(null)
             setPoint(null)
@@ -300,6 +395,28 @@ export default function App() {
         </div>
       )}
 
+      {showProfile && <ProfileModal shared={shared} onClose={() => setShowProfile(false)} />}
+      {shared.imported && (
+        <div className="toast">
+          <span>
+            {shared.imported}s favoriter och historik är inlästa och syns nu i {shared.partner?.color === 'pink' ? 'rosa' : 'blått'}.
+            {!shared.me && ' Välj vem du är för att kunna dela tillbaka.'}
+          </span>
+          <button
+            onClick={() => {
+              shared.dismissImported()
+              setPanel('ours')
+              setLeftOpen(true)
+              if (!shared.me) setShowProfile(true)
+            }}
+          >
+            Visa
+          </button>
+          <button className="x small" onClick={shared.dismissImported} aria-label="Stäng">
+            ×
+          </button>
+        </div>
+      )}
       {showMethod && <Methodology meta={data.meta} prices={data.prices} onClose={() => setShowMethod(false)} />}
     </div>
   )

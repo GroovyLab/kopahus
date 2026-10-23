@@ -4,12 +4,15 @@ import type { PriceArea, Prefs } from '../lib/types'
 
 export default function Compare({
   rows,
+  owners = [],
   prices,
   prefs,
   onRemove,
   onPick,
 }: {
   rows: Row[]
+  /** Vems favorit varje område är (färg per person) */
+  owners?: { color: string; ids: string[] }[]
   prices: Record<string, PriceArea>
   prefs: Prefs
   onRemove: (id: string) => void
@@ -49,6 +52,11 @@ export default function Compare({
               {rows.map((r) => (
                 <th key={r.p.id}>
                   <button className="link" onClick={() => onPick(r)}>
+                    {owners
+                      .filter((o) => o.ids.includes(r.p.id))
+                      .map((o) => (
+                        <i key={o.color} className="person-dot" style={{ background: o.color }} />
+                      ))}
                     {r.p.regsoName}
                   </button>
                   <small>{r.p.kommunName}</small>

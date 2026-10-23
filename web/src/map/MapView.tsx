@@ -25,6 +25,9 @@ interface Props {
   workplaces: (Workplace | null)[]
   layers: MapLayersState
   flyTo: { center: [number, number]; zoom: number; key: number } | null
+  /** Delade favoriter per person (blå/rosa) och visningshistorik som punkter */
+  personFavs: { color: string; ids: string[]; offset: number }[]
+  personHistory: { lon: number; lat: number; color: string }[]
   onPick: (lngLat: [number, number], desoId: string | null) => void
   onHover: (info: { x: number; y: number; id: string } | null) => void
 }
@@ -126,6 +129,29 @@ export default function MapView(props: Props) {
           'line-color': ['match', ['get', 'cat'], 'sarskilt', '#ff3b6b', '#ff7a45'],
           'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1, 14, 3],
           'line-dasharray': [2, 1.5],
+        },
+      })
+      // Delade favoriter: en linje per person, förskjutna så att båda syns om ni gillar samma område
+      for (const i of [0, 1]) {
+        map.addLayer({
+          id: `fav-line-${i}`,
+          type: 'line',
+          source: 'deso',
+          paint: { 'line-color': '#ffffff', 'line-width': 3.2, 'line-offset': 0 },
+          filter: ['in', ['get', 'id'], ['literal', []]],
+        })
+      }
+      map.addSource('history', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      map.addLayer({
+        id: 'history-dots',
+        type: 'circle',
+        source: 'history',
+        paint: {
+          'circle-color': ['get', 'color'],
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 2.5, 14, 6],
+          'circle-opacity': 0.85,
+          'circle-stroke-color': '#0b0f17',
+          'circle-stroke-width': 1,
         },
       })
       map.addLayer({
@@ -279,6 +305,7 @@ export default function MapView(props: Props) {
       applyColors()
       applyLayers()
       applySelected()
+      applyPeople()
     })
     return () => map.remove()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,6 +344,29 @@ export default function MapView(props: Props) {
   useEffect(applyColors, [props.colors, props.layers.extrude])
   useEffect(applyLayers, [props.layers])
   useEffect(applySelected, [props.selectedId])
+
+  function applyPeople() {
+    const map = mapRef.current
+    if (!map || !ready.current) return
+    const { personFavs, personHistory } = propsRef.current
+    for (const i of [0, 1]) {
+      const pf = personFavs[i]
+      map.setFilter(`fav-line-${i}`, ['in', ['get', 'id'], ['literal', pf?.ids ?? []]])
+      if (pf) {
+        map.setPaintProperty(`fav-line-${i}`, 'line-color', pf.color)
+        map.setPaintProperty(`fav-line-${i}`, 'line-offset', pf.offset)
+      }
+    }
+    ;(map.getSource('history') as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: 'FeatureCollection',
+      features: personHistory.map((h) => ({
+        type: 'Feature',
+        properties: { color: h.color },
+        geometry: { type: 'Point', coordinates: [h.lon, h.lat] },
+      })),
+    })
+  }
+  useEffect(applyPeople, [props.personFavs, props.personHistory])
 
   useEffect(() => {
     const map = mapRef.current

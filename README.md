@@ -14,6 +14,8 @@ DeSO-nivå och enskilda gator, bedöms utifrån trygghet, pris, restid och servi
 - **Service:** Matbutiker, förskolor, parker och badplatser (OpenStreetMap) samt grundskolor med meritvärde
   (Skolverket).
 - **Matchning:** Egna vikter per faktor, budget och boyta, topplista och jämförelse av sparade områden.
+- **Delning utan server:** Var och en väljer namn och färg (blå/rosa). Favoriter och historik sparas i webbläsaren
+  och delas som en länk (`#dela=…`). Delen efter `#` skickas aldrig till någon server.
 
 ## Struktur
 
@@ -39,9 +41,9 @@ PY=.venv/Scripts/python ./run_all.sh
 
 ## Publicering
 
-`.github/workflows/deploy.yml` bygger och publicerar `web/` till GitHub Pages. Den körs manuellt via
-*Actions → Publicera på GitHub Pages → Run workflow*. GitHub Pages kräver publikt repo på gratisplanen.
-Aktivera Pages under *Settings → Pages → Source: GitHub Actions*.
+`.github/workflows/deploy.yml` bygger och publicerar `web/` till GitHub Pages vid varje push till `main`
+(eller manuellt via *Actions → Run workflow*). Kräver publikt repo på gratisplanen och
+*Settings → Pages → Source: GitHub Actions*.
 
 ## Källor
 
