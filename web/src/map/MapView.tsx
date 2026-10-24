@@ -33,6 +33,9 @@ interface Props {
 }
 
 const STYLE = 'https://tiles.openfreemap.org/styles/dark'
+const WATER = '#1d4f7a'
+/** Områden som tonats ned (över budget/utsatta): neutral grå så de inte förväxlas med vatten */
+const DIMMED = '#30343c'
 // Workern serveras som orörd statisk fil (Vite skulle annars injicera sin klient i den)
 maplibregl.setWorkerUrl(new URL('maplibre-gl-worker.mjs', document.baseURI).href)
 
@@ -101,6 +104,25 @@ export default function MapView(props: Props) {
         },
         firstSymbol,
       )
+      // SCB:s områden täcker även sjöar och fjärdar, så vattnet ritas om ovanpå dem i tydlig blå
+      const waterSrc = map.getStyle().layers?.find((l) => l.id === 'water') as { source?: string } | undefined
+      if (waterSrc?.source) {
+        map.setPaintProperty('water', 'fill-color', WATER)
+        map.addLayer(
+          { id: 'water-over', type: 'fill', source: waterSrc.source, 'source-layer': 'water', paint: { 'fill-color': WATER } },
+          firstSymbol,
+        )
+        map.addLayer(
+          {
+            id: 'waterway-over',
+            type: 'line',
+            source: waterSrc.source,
+            'source-layer': 'waterway',
+            paint: { 'line-color': WATER, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 15, 3] },
+          },
+          firstSymbol,
+        )
+      }
       map.addLayer({
         id: 'deso-line',
         type: 'line',
@@ -318,7 +340,7 @@ export default function MapView(props: Props) {
     for (const [id, v] of propsRef.current.colors) {
       const idx = idIndex.current.get(id)
       if (idx == null) continue
-      map.setFeatureState({ source: 'deso', id: idx }, { c: v.dim ? '#1c2230' : v.color, h: extrude && !v.dim ? v.height : 0 })
+      map.setFeatureState({ source: 'deso', id: idx }, { c: v.dim ? DIMMED : v.color, h: extrude && !v.dim ? v.height : 0 })
     }
   }
   function applyLayers() {
